@@ -1,0 +1,104 @@
+{
+    "name": "InputHandler",
+    "maps": [
+        {
+            "name": "Ship",
+            "id": "d488c5d4-ecea-4010-9dbf-b51e1e9f7c27",
+            "actions": [
+                {
+                    "name": "Turn",
+                    "type": "Button",
+                    "id": "15e43970-9b74-4c7f-8863-15c1756f8810",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Move",
+                    "type": "Button",
+                    "id": "56b1122b-9f3e-4b1c-9d95-ee4c15e2037e",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "1D Axis",
+                    "id": "60acc817-8792-4b53-8150-23b6a4f7ee06",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Turn",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "negative",
+                    "id": "c24f49ac-6a53-4115-901c-0c36c788e38f",
+                    "path": "<Keyboard>/a",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Turn",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "positive",
+                    "id": "1691cd29-4e39-4af7-8871-236add42e823",
+                    "path": "<Keyboard>/d",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Turn",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "",
+                    "id": "4b3344c8-fea2-426a-8714-1434ddcbcbae",
+                    "path": "<Keyboard>/w",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Move",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "Camera",
+            "id": "d1c1ac63-4754-45d6-bf03-c94e6529c6d8",
+            "actions": [
+                {
+                    "name": "Turn",
+                    "type": "Value",
+                    "id": "978f9e4d-b3e3-435b-a2a0-e56874fb2171",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "11d62a3c-5f51-4706-9cd5-98ab54d4b9d8",
+                    "path": "<Mouse>/delta",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Turn",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}
