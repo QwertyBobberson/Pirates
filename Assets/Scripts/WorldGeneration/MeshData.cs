@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.Mathematics;
+using UnityEngine.Jobs;
 using System;
 
 /// <summary>
@@ -12,10 +13,15 @@ public struct MeshData
     public float3[] vertices;
     public int[] triangles;
 
+    public float x;
+    public float z;
+
     public MeshData(float3[] _vertices, int[] _triangles)
     {
         vertices = _vertices;
         triangles = _triangles;
+        x = 0;
+        z = 0;
     }
     /// <summary>
     /// Generate a square chunk
@@ -30,12 +36,12 @@ public struct MeshData
     /// <param name="height">Amount to multiply height map by</param>
     /// <param name="heightPower">Power to raise height map to</param>
     /// <returns>A randomly generated MeshData representing a square chunk</returns>
-    public static MeshData GenerateChunk(int size, float offsetX, float offsetZ, int octaves, float scale, float lacunarity, float persistance, float height, float oceanHeight)
+    public void GenerateChunk(int size, float offsetX, float offsetZ, int octaves, float scale, float lacunarity, float persistance, float height, float oceanHeight)
     {
-        float3[] vertices = GenerateVertices(size, offsetX, offsetZ, octaves, scale, lacunarity, persistance, height);
-        int[] triangles = GenerateTriangles(size);
-        return TrimWater(triangles, vertices, oceanHeight);
-        //return new MeshData(vertices, triangles);
+        x = offsetX;
+        z = offsetZ;
+        GenerateVertices(size, offsetX, offsetZ, octaves, scale, lacunarity, persistance, height);
+        GenerateTriangles(size);
     }
 
     /// <summary>
@@ -51,8 +57,9 @@ public struct MeshData
     /// <param name="height">Amount to multiply height map by</param>
     /// <param name="heightPower">Power to raise height map to</param>
     /// <returns>Array of vertices representing the height map of a square chunk</returns>
-    public static float3[] GenerateVertices(int size, float offsetX, float offsetZ, int octaves, float scale, float lacunarity, float persistance, float height)
+    public void GenerateVertices(int size, float offsetX, float offsetZ, int octaves, float scale, float lacunarity, float persistance, float height)
     {
+
         //Temporary storage for vertice locations
         float3[] vertices = new float3[(size + 1) * (size + 1)];
 
@@ -82,25 +89,26 @@ public struct MeshData
                 //y = Mathf.Pow(y, heightPower);
 
                 //Store the height, x, and z of the new vertice
-                vertices[i] = new float3(x, y, z);
+                vertices[i] = new float3(x, y * height, z);
                 i++;
             }
         }
 
         //Normalization: Just lowers map to y = 0
         //TODO: Map y from 0-1 and apply curve
-        for(int i = 0, z = 0; z <= size; z++)
-        {
-            for(int x = 0; x <= size; x++)
-            {
-                vertices[i].y *= WorldGeneration.singleton.curve.Evaluate(vertices[i].y) * height;
-                i++;
-            }
-        }
+        // for(int i = 0, z = 0; z <= size; z++)
+        // {
+        //     for(int x = 0; x <= size; x++)
+        //     {
+        //         vertices[i].y *= WorldGeneration.singleton.curve.Evaluate(vertices[i].y) * height;
+        //         i++;
+        //     }
+        // }
 
         vertices[0].y = 0;
 
-        return vertices;
+        this.vertices = vertices;
+    
     }
 
     /// <summary>
@@ -108,7 +116,7 @@ public struct MeshData
     /// </summary>
     /// <param name="size">Width and Length of a square chunk</param>
     /// <returns>Array of integers representing the triangles of the chunk</returns>
-    public static int[] GenerateTriangles(int size)
+    public void GenerateTriangles(int size)
     {
         int[] triangles = new int[size * size * 6];
 
@@ -131,10 +139,10 @@ public struct MeshData
             vert++;
         }
         triangles[0] = 1;
-        return triangles;
+        this.triangles = triangles;
     }
 
-    public static MeshData TrimWater(int[] triangles, float3[] vertices, float oceanLevel)
+    public void TrimWater(int[] triangles, float3[] vertices, float oceanLevel)
     {
         int trisToRemove = 0;
         
@@ -165,6 +173,6 @@ public struct MeshData
             }
         }
 
-        return new MeshData(vertices, newTriangles);
+        this.triangles = newTriangles;
     }
 }

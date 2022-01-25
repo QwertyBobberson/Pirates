@@ -17,6 +17,7 @@ public class Chunk : MonoBehaviour
         mesh.triangles = meshData.triangles;
         mesh.RecalculateNormals();
         GetComponent<MeshFilter>().sharedMesh = mesh;
+        gameObject.name += $" : {meshData.x}, {meshData.z}";
     }
 
     /// <summary>

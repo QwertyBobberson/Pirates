@@ -6,11 +6,13 @@ using UnityEngine.Jobs;
 using Unity.Collections;
 using Unity.Mathematics;
 using Unity.Jobs;
+using Unity.Burst;
 
 using Random = UnityEngine.Random;
 
 public class WorldGeneration : MonoBehaviour
 {
+    public bool multiThread;
     /// <summary>
     /// Prefab that holds a single chunk
     /// </summary>
@@ -73,7 +75,7 @@ public class WorldGeneration : MonoBehaviour
     /// <summary>
     /// List of all chunks currently loaded
     /// </summary>
-    public List<Chunk> loadedChunks;
+    public Chunk[] loadedChunks;
     /// <summary>
     /// The chunk the player is currently on
     /// </summary>
@@ -89,6 +91,8 @@ public class WorldGeneration : MonoBehaviour
     public int renderDistance;
 
     public static WorldGeneration singleton;
+
+    public System.Object genLock;
 
     public void Start()
     {
@@ -110,10 +114,10 @@ public class WorldGeneration : MonoBehaviour
         currentChunk = GetChunk(player.transform.position);
         if (prevChunk != currentChunk)
         {
-            NativeList<JobHandle> handles = new NativeList<JobHandle>();
+            NativeList<JobHandle> handles = new NativeList<JobHandle>(Allocator.TempJob);
             List<int> chunksToReload = new List<int>();
 
-            for (int i = 0; i < loadedChunks.Count; i++)
+            for (int i = 0; i < loadedChunks.Length; i++)
             {
                 Vector3 chunkDist = GetChunk(loadedChunks[i].transform.position) - currentChunk;
                 if (Mathf.Abs(chunkDist.x) > renderDistance || Mathf.Abs(chunkDist.z) > renderDistance)
@@ -123,10 +127,24 @@ public class WorldGeneration : MonoBehaviour
                     Destroy(loadedChunks[i].gameObject);
                     Vector3 newChunkPos = new Vector3(currentChunk.x - newChunkDist.x, 0, currentChunk.z - newChunkDist.z);
 
-                    handles.Add(CreateGenerateChunkJob(newChunkPos.x, newChunkPos.z, i));
+                    if (multiThread)
+                    {
+                        handles.Add(CreateGenerateChunkJob(newChunkPos.x, newChunkPos.z, i));
+                    }
+                    else
+                    {
+                        DateTime time = DateTime.Now;
+                        loadedChunks[i] = GenerateChunk(newChunkPos.x, newChunkPos.z);
+                        Debug.Log($"{loadedChunks.Length} chunks loaded in {(DateTime.Now - time).TotalMilliseconds} milliseconds");
+                    }
                 }
             }
-            JobHandle.CompleteAll(handles);
+            if (chunksToReload.Count > 0 && multiThread)
+            {
+                DateTime time = DateTime.Now;
+                JobHandle.CompleteAll(handles);
+                Debug.Log($"{chunksToReload.Count} chunks loaded in {(DateTime.Now - time).TotalMilliseconds} milliseconds");
+            }
             handles.Dispose();
 
             for (int i = 0; i < chunksToReload.Count; i++)
@@ -143,29 +161,43 @@ public class WorldGeneration : MonoBehaviour
     /// </summary>
     public void InitialLoad()
     {
-        loadedChunks = new List<Chunk>();
+        genLock = new System.Object();
+        loadedChunks = new Chunk[(int)Mathf.Pow(renderDistance * 2 + 1, 2)];
         Random.InitState(seed);
-        offset.x = Random.Range(-100000, 100000);
-        offset.y = Random.Range(-100000, 100000);
+        //offset.x = Random.Range(-100000, 100000);
+        //offset.y = Random.Range(-100000, 100000);
 
         NativeList<JobHandle> handles = new NativeList<JobHandle>(Allocator.TempJob);
-        //List<GenerateChunkJob> jobs = new List<GenerateChunkJob>();
 
-        for (int x = -renderDistance; x <= renderDistance; x++)
+        DateTime time = DateTime.Now;
+
+        for (int i = 0, x = -renderDistance; x <= renderDistance; x++)
         {
-            for (int z = -renderDistance; z <= renderDistance; z++)
+            for (int z = -renderDistance; z <= renderDistance; z++, i++)
             {
-                handles.Add(CreateGenerateChunkJob(x, z, loadedChunks.Count));
+                if (multiThread)
+                {
+                    handles.Add(CreateGenerateChunkJob(x, z, i));
+                }
+                else
+                {
+                    loadedChunks[i] = (GenerateChunk(x, z));
+                }
             }
         }
 
-        JobHandle.CompleteAll(handles);
+        if (multiThread)
+        {
+            JobHandle.CompleteAll(handles);
+        }
         handles.Dispose();
 
-        for (int i = 0; i < loadedChunks.Count; i++)
+        for (int i = 0; i < loadedChunks.Length; i++)
         {
             loadedChunks[i].UpdateMesh();
         }
+        
+        Debug.Log($"{loadedChunks.Length} chunks loaded in {(DateTime.Now - time).TotalMilliseconds} milliseconds");
     }
 
     /// <summary>
@@ -191,18 +223,29 @@ public class WorldGeneration : MonoBehaviour
         }
     }
 
+    public Chunk GenerateChunk(float x, float z)
+    {
+        Chunk chunk = GameObject.Instantiate(chunkObj, new Vector3(x * chunkSize, 0, z * chunkSize), Quaternion.identity, this.transform).GetComponent<Chunk>();
+
+        chunk.meshData.GenerateChunk(chunkSize,
+                                    x * chunkSize + offset.x,
+                                    z * chunkSize + offset.y,
+                                    octaves,
+                                    scale,
+                                    lacunarity,
+                                    persistance,
+                                    height,
+                                    oceanLevel);
+
+        return chunk;
+    }
+
     public JobHandle CreateGenerateChunkJob(float x, float z, int i)
     {
         Chunk chunk = GameObject.Instantiate(chunkObj, new Vector3(x * chunkSize, 0, z * chunkSize), Quaternion.identity, this.transform).GetComponent<Chunk>();
-        if(loadedChunks.Count > i)
-        {
-            loadedChunks[i] = chunk;
-        }
-        else
-        {
-            loadedChunks.Add(chunk);
-            i = loadedChunks.Count - 1;
-        }
+        loadedChunks[i] = chunk;
+        chunk.gameObject.name = $"{x}, {z}";
+        chunk.meshData = new MeshData();
         Structs.ChunkInfo info = new Structs.ChunkInfo(chunkSize,
                                                        x * chunkSize + offset.x,
                                                        z * chunkSize + offset.y,
@@ -228,14 +271,14 @@ public struct GenerateChunkJob : IJob
 
     public void Execute()
     {
-        WorldGeneration.singleton.loadedChunks[info.index].meshData = MeshData.GenerateChunk(info.size,
-                                                                                            info.offsetX * info.size + info.offsetX,
-                                                                                            info.offsetZ * info.size + info.offsetZ,
-                                                                                            info.octaves,
-                                                                                            info.scale,
-                                                                                            info.lacunarity,
-                                                                                            info.persistance,
-                                                                                            info.height,
-                                                                                            info.oceanHeight);
+        WorldGeneration.singleton.loadedChunks[info.index].meshData.GenerateChunk(info.size,
+                                                                                info.offsetX * info.size,
+                                                                                info.offsetZ * info.size,
+                                                                                info.octaves,
+                                                                                info.scale,
+                                                                                info.lacunarity,
+                                                                                info.persistance,
+                                                                                info.height,
+                                                                                info.oceanHeight);
     }
 }
