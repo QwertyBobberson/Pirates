@@ -13,7 +13,6 @@ public class ChunkManager : MonoBehaviour
             for(int z = -50; z <= 50; z++)
             {
                 GameObject.Instantiate(chunk, new Vector3(x * 100, 0, z * 100), Quaternion.identity);
-                Debug.Log($"{x}, {z}");
             }
         }   
     }

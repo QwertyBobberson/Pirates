@@ -10,6 +10,13 @@ public class CameraControls : MonoBehaviour
     private float xRot;
     private float yRot;
 
+    public GameObject water;
+
+    public int cameraPosNum;
+    public Transform[] cameraPos;
+
+    public Transform waterPos;
+
     private InputHandler manager;
 
     void Start()
@@ -22,6 +29,12 @@ public class CameraControls : MonoBehaviour
         Cursor.visible = false;
     }
 
+    public void Update()
+    {
+        water.transform.position = new Vector3(waterPos.position.x, 0, waterPos.position.z);
+        transform.position = cameraPos[cameraPosNum].position;
+    }
+
     public void TurnCamera(InputAction.CallbackContext context)
     {
         Vector2 input = context.ReadValue<Vector2>();
@@ -30,6 +43,6 @@ public class CameraControls : MonoBehaviour
         xRot -= input.y * Time.deltaTime * turnSpeed;
         xRot = Mathf.Clamp(xRot, -maxRot, maxRot);
 
-        transform.rotation = Quaternion.Euler(xRot, yRot, 0);
+        transform.localRotation = Quaternion.Euler(xRot, yRot, 0);
     }
 }
