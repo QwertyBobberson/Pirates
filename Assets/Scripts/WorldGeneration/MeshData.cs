@@ -2,7 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.Mathematics;
-using UnityEngine.Jobs;
+using Unity.Jobs;
+using Unity.Collections;
 using System;
 
 /// <summary>
@@ -13,20 +14,19 @@ public struct MeshData
     public float3[] vertices;
     public int[] triangles;
 
-    public float x;
-    public float z;
+    public NativeArray<float> heights;
 
     public MeshData(float3[] _vertices, int[] _triangles)
     {
         vertices = _vertices;
         triangles = _triangles;
-        x = 0;
-        z = 0;
+
+        heights = new NativeArray<float>();
     }
     /// <summary>
     /// Generate a square chunk
     /// </summary>
-    /// <param name="size">Width and length of a square chunk</param>
+    /// <param name="WorldGeneration.singleton.chunkSize">Width and length of a square chunk</param>
     /// <param name="offsetX">Offset on the X Axis</param>
     /// <param name="offsetZ">Offset on the Z Axis</param>
     /// <param name="octaves">Layers of detail to add</param>
@@ -36,18 +36,17 @@ public struct MeshData
     /// <param name="height">Amount to multiply height map by</param>
     /// <param name="heightPower">Power to raise height map to</param>
     /// <returns>A randomly generated MeshData representing a square chunk</returns>
-    public void GenerateChunk(int size, float offsetX, float offsetZ, int octaves, float scale, float lacunarity, float persistance, float height, float oceanHeight)
+    public void GenerateChunk(float offsetX, float offsetZ, float chunkHeight, int resolution)
     {
-        x = offsetX;
-        z = offsetZ;
-        GenerateVertices(size, offsetX, offsetZ, octaves, scale, lacunarity, persistance, height);
-        GenerateTriangles(size);
+        GenerateVertices(offsetX, offsetZ, chunkHeight, resolution);
+        GenerateTriangles(resolution);
+        TrimWater();
     }
 
     /// <summary>
     /// Generate the vertices of a square chunk
     /// </summary>
-    /// <param name="size">Width and length of a square chunk</param>
+    /// <param name="WorldGeneration.singleton.chunkSize">Width and length of a square chunk</param>
     /// <param name="offsetX">Offset on the X Axis</param>
     /// <param name="offsetZ">Offset on the Z Axis</param>
     /// <param name="octaves">Layers of detail to add</param>
@@ -57,39 +56,37 @@ public struct MeshData
     /// <param name="height">Amount to multiply height map by</param>
     /// <param name="heightPower">Power to raise height map to</param>
     /// <returns>Array of vertices representing the height map of a square chunk</returns>
-    public void GenerateVertices(int size, float offsetX, float offsetZ, int octaves, float scale, float lacunarity, float persistance, float height)
+    public void GenerateVertices(float xOffset, float zOffset, float chunkHeight, int resolution)
     {
-
         //Temporary storage for vertice locations
-        float3[] vertices = new float3[(size + 1) * (size + 1)];
+        WorldGeneration worldGen = WorldGeneration.singleton;
+        int chunkSize = (int)(worldGen.chunkSize/resolution);
+        float3[] vertices = new float3[(chunkSize + 1) * (chunkSize + 1)];
 
         //Generate a square of vertices
         //TODO: Replace i with a formula
-        for(int i = 0, z = 0; z <= size; z++)
+        for(int i = 0, z = 0; z <= worldGen.chunkSize; z += resolution)
         {
-            for(int x = 0; x <= size; x++)
+            for(int x = 0; x <= worldGen.chunkSize; x += resolution)
             {
                 //Height of the vertice
                 float y = 0;
 
                 //Used to decrease the affect of each layer of noise
                 float amplitude = .5f;
-                float frequency = 1;
+                float frequency = 2;
 
                 //Add layers of noise with decreasing amplitudes and increasing frequencies for extra detail
-                for(int j = 0; j < octaves; j++)
+                for(int j = 0; j < worldGen.octaves; j++)
                 {
-                    y += Mathf.PerlinNoise((float)(x + offsetX) / scale * frequency, (float)(z + offsetZ) / scale * frequency) * amplitude;
-
-                    amplitude *= persistance;
-                    frequency *= lacunarity;
+                    y += Mathf.PerlinNoise((float)(x + xOffset) / worldGen.scale * frequency, (float)(z + zOffset) / worldGen.scale * frequency) * amplitude;
+                    amplitude *= worldGen.persistance;
+                    frequency *= worldGen.lacunarity;
                 }
-
-                //Raise y to a power for flatter valleys and steeper hills
-                //y = Mathf.Pow(y, heightPower);
-
+                y *= worldGen.height; //* chunkHeight;
+                y *= WorldGeneration.singleton.curve.Evaluate(y); //* worldGen.height;
                 //Store the height, x, and z of the new vertice
-                vertices[i] = new float3(x, y * height, z);
+                vertices[i] = new float3(x, y, z);
                 i++;
             }
         }
@@ -105,8 +102,6 @@ public struct MeshData
         //     }
         // }
 
-        vertices[0].y = 0;
-
         this.vertices = vertices;
     
     }
@@ -114,35 +109,34 @@ public struct MeshData
     /// <summary>
     /// Generate an array to tell the computer how to render the mesh
     /// </summary>
-    /// <param name="size">Width and Length of a square chunk</param>
     /// <returns>Array of integers representing the triangles of the chunk</returns>
-    public void GenerateTriangles(int size)
+    public void GenerateTriangles(float resolution)
     {
-        int[] triangles = new int[size * size * 6];
+        int chunkSize = (int)(WorldGeneration.singleton.chunkSize/resolution);
+        int[] triangles = new int[chunkSize * chunkSize * 6];
 
         int vert = 0;
         int triNum = 0;
-        for(int z = 0; z < size; z++)
+        for(int z = 0; z < chunkSize; z++)
         {
-            for(int x = 0; x < size; x++)
+            for(int x = 0; x < chunkSize; x++)
             {
                 triangles[triNum] = vert + 0;
-                triangles[triNum + 1] = vert + size + 1;
+                triangles[triNum + 1] = vert + chunkSize + 1;
                 triangles[triNum + 2] = vert + 1;
                 triangles[triNum + 3] = vert + 1;
-                triangles[triNum + 4] = vert + size + 1;
-                triangles[triNum + 5] = vert + size + 2;
+                triangles[triNum + 4] = vert + chunkSize + 1;
+                triangles[triNum + 5] = vert + chunkSize + 2;
                 
                 vert++;
                 triNum += 6;
             }
             vert++;
         }
-        triangles[0] = 1;
         this.triangles = triangles;
     }
 
-    public void TrimWater(int[] triangles, float3[] vertices, float oceanLevel)
+    public void TrimWater()
     {
         int trisToRemove = 0;
         
@@ -151,7 +145,7 @@ public struct MeshData
             bool deleteTriangle = true;
             for(int j = 0; j < 3; j++)
             {
-                if(vertices[triangles[i + j]].y > oceanLevel)
+                if(vertices[triangles[i + j]].y > WorldGeneration.singleton.oceanLevel)
                 {
                     deleteTriangle = false;
                 }
@@ -174,5 +168,48 @@ public struct MeshData
         }
 
         this.triangles = newTriangles;
+    }
+}
+
+public struct GenerateVertexJob : IJobParallelFor
+{
+    int xOff;
+    int zOff;
+
+    NativeArray<float> heights;
+
+    public GenerateVertexJob(int _x, int _z, NativeArray<float> _heights)
+    {
+        xOff = _z;
+        zOff = _z;
+        heights = _heights;
+    }
+
+    public void Execute(int i)
+    {
+        WorldGeneration worldGen = WorldGeneration.singleton;
+        //Height of the vertice
+        float y = 0;
+
+        //Used to decrease the affect of each layer of noise
+        float amplitude = .5f;
+        float frequency = 2;
+
+        int x = i/worldGen.chunkSize;
+        int z = i%worldGen.chunkSize;
+
+        //Add layers of noise with decreasing amplitudes and increasing frequencies for extra detail
+        for(int j = 0; j < worldGen.octaves; j++)
+        {
+            y += Mathf.PerlinNoise((float)(xOff) / worldGen.scale * frequency, (float)(zOff) / worldGen.scale * frequency) * amplitude * worldGen.height;
+
+            amplitude *= worldGen.persistance;
+            frequency *= worldGen.lacunarity;
+        }
+
+        y = WorldGeneration.singleton.curve.Evaluate(heights[i]) * worldGen.height;
+        //Store the height, x, and z of the new vertice
+        heights[i] = y;
+        i++;
     }
 }

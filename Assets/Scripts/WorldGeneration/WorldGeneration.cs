@@ -12,6 +12,8 @@ using Random = UnityEngine.Random;
 
 public class WorldGeneration : MonoBehaviour
 {
+    public float chunkShreshold;
+    public float chunkNoiseScale;
     public bool multiThread;
     /// <summary>
     /// Prefab that holds a single chunk
@@ -85,6 +87,8 @@ public class WorldGeneration : MonoBehaviour
     /// </summary>
     private Vector3 prevChunk;
 
+    public GameObject debugSphere;
+
     /// <summary>
     /// Max distance from the player a chunk can be before it is unloaded
     /// </summary>
@@ -92,7 +96,7 @@ public class WorldGeneration : MonoBehaviour
 
     public static WorldGeneration singleton;
 
-    public System.Object genLock;
+    public int resolution;
 
     public void Start()
     {
@@ -129,7 +133,12 @@ public class WorldGeneration : MonoBehaviour
 
                     if (multiThread)
                     {
-                        handles.Add(CreateGenerateChunkJob(newChunkPos.x, newChunkPos.z, i));
+                        JobHandle handle;
+                        bool exists = (CreateGenerateChunkJob(newChunkPos.x, newChunkPos.z, i, out handle));
+                        if(exists)
+                        {
+                            handles.Add(handle);
+                        }
                     }
                     else
                     {
@@ -161,11 +170,10 @@ public class WorldGeneration : MonoBehaviour
     /// </summary>
     public void InitialLoad()
     {
-        genLock = new System.Object();
         loadedChunks = new Chunk[(int)Mathf.Pow(renderDistance * 2 + 1, 2)];
         Random.InitState(seed);
-        //offset.x = Random.Range(-100000, 100000);
-        //offset.y = Random.Range(-100000, 100000);
+        offset.x = Random.Range(-100000, 100000);
+        offset.y = Random.Range(-100000, 100000);
 
         NativeList<JobHandle> handles = new NativeList<JobHandle>(Allocator.TempJob);
 
@@ -177,7 +185,9 @@ public class WorldGeneration : MonoBehaviour
             {
                 if (multiThread)
                 {
-                    handles.Add(CreateGenerateChunkJob(x, z, i));
+                    JobHandle handle;
+                    bool exists = CreateGenerateChunkJob(x, z, i, out handle);
+                    if(exists) handles.Add(handle);
                 }
                 else
                 {
@@ -190,14 +200,14 @@ public class WorldGeneration : MonoBehaviour
         {
             JobHandle.CompleteAll(handles);
         }
-        handles.Dispose();
 
         for (int i = 0; i < loadedChunks.Length; i++)
         {
             loadedChunks[i].UpdateMesh();
         }
         
-        Debug.Log($"{loadedChunks.Length} chunks loaded in {(DateTime.Now - time).TotalMilliseconds} milliseconds");
+        Debug.Log($"{handles.Length} chunks loaded in {(DateTime.Now - time).TotalMilliseconds} milliseconds");
+        handles.Dispose();
     }
 
     /// <summary>
@@ -226,37 +236,44 @@ public class WorldGeneration : MonoBehaviour
     public Chunk GenerateChunk(float x, float z)
     {
         Chunk chunk = GameObject.Instantiate(chunkObj, new Vector3(x * chunkSize, 0, z * chunkSize), Quaternion.identity, this.transform).GetComponent<Chunk>();
-
-        chunk.meshData.GenerateChunk(chunkSize,
-                                    x * chunkSize + offset.x,
-                                    z * chunkSize + offset.y,
-                                    octaves,
-                                    scale,
-                                    lacunarity,
-                                    persistance,
-                                    height,
-                                    oceanLevel);
+        
+        float chunkVal = Mathf.PerlinNoise(x * chunkSize * chunkNoiseScale + offset.x/chunkSize, z * chunkSize * chunkNoiseScale);
+        if(chunkVal > chunkShreshold)
+        {
+            chunk.hasIsland = true;
+            chunk.meshData.GenerateChunk(x * chunkSize + offset.x, z * chunkSize + offset.y, chunkVal, resolution);
+        }
+        else
+        {
+            chunk.hasIsland = false;
+            Debug.Log($"Chunk at ({x},{z}) had a height of {chunkVal}, too low to generate a chunk");
+        }
 
         return chunk;
     }
 
-    public JobHandle CreateGenerateChunkJob(float x, float z, int i)
+    public bool CreateGenerateChunkJob(float x, float z, int i, out JobHandle handle)
     {
         Chunk chunk = GameObject.Instantiate(chunkObj, new Vector3(x * chunkSize, 0, z * chunkSize), Quaternion.identity, this.transform).GetComponent<Chunk>();
         loadedChunks[i] = chunk;
         chunk.gameObject.name = $"{x}, {z}";
         chunk.meshData = new MeshData();
-        Structs.ChunkInfo info = new Structs.ChunkInfo(chunkSize,
-                                                       x * chunkSize + offset.x,
-                                                       z * chunkSize + offset.y,
-                                                       octaves,
-                                                       scale,
-                                                       lacunarity,
-                                                       persistance,
-                                                       height,
-                                                       oceanLevel,
-                                                       i);
-        return new GenerateChunkJob(info).Schedule();
+        float chunkVal = Mathf.PerlinNoise((x * chunkSize  + offset.x)/chunkSize/chunkNoiseScale, (z * chunkSize + offset.y)/chunkSize/chunkNoiseScale);
+        
+        chunk.gameObject.GetComponent<Renderer>().material.color = new Color(chunkVal, chunkVal, chunkVal);
+        if(chunkVal > chunkShreshold)
+        {
+            chunk.hasIsland = true;
+            Structs.ChunkInfo info = new Structs.ChunkInfo(x * chunkSize + offset.x, z * chunkSize + offset.y, chunkVal, i, resolution);
+            handle = new GenerateChunkJob(info).Schedule();
+            return true;
+        }
+        else
+        {
+            chunk.hasIsland = false;
+            handle = new JobHandle();
+            return false;
+        }
     }
 }
 
@@ -271,14 +288,6 @@ public struct GenerateChunkJob : IJob
 
     public void Execute()
     {
-        WorldGeneration.singleton.loadedChunks[info.index].meshData.GenerateChunk(info.size,
-                                                                                info.offsetX * info.size,
-                                                                                info.offsetZ * info.size,
-                                                                                info.octaves,
-                                                                                info.scale,
-                                                                                info.lacunarity,
-                                                                                info.persistance,
-                                                                                info.height,
-                                                                                info.oceanHeight);
+        WorldGeneration.singleton.loadedChunks[info.index].meshData.GenerateChunk(info.offsetX, info.offsetZ, info.chunkHeight, info.resolution);
     }
 }

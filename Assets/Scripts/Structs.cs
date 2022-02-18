@@ -20,28 +20,18 @@ namespace Structs
     public struct ChunkInfo
     {
         public int index;
-        public int size;
         public float offsetX;
         public float offsetZ;
-        public int octaves;
-        public float scale;
-        public float lacunarity;
-        public float persistance;
-        public float height;
-        public float oceanHeight;
+        public float chunkHeight;
+        public int resolution;
 
-        public ChunkInfo(int _size, float _offsetX, float _offsetZ, int _octaves, float _scale, float _lacunarity, float _persistance, float _height, float _oceanHeight, int _index)
+        public ChunkInfo(float _offsetX, float _offsetZ, float _chunkHeight, int _index, int _resolution) 
         {
             index = _index;
-            size = _size;
             offsetX = _offsetX;
             offsetZ = _offsetZ;
-            octaves = _octaves;
-            scale = _scale;
-            lacunarity = _lacunarity;
-            persistance = _persistance;
-            height = _height;
-            oceanHeight = _oceanHeight;
+            chunkHeight = _chunkHeight;
+            resolution = _resolution;
         }
     }
 

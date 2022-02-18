@@ -6,18 +6,20 @@ using Unity.Mathematics;
 public class Chunk : MonoBehaviour
 {
     public MeshData meshData;
-
+    public bool hasIsland;
     /// <summary>
     /// Resync the in engine mesh to the meshdata
     /// </summary>
     public void UpdateMesh()
     {   
-        Mesh mesh = new Mesh();
-        mesh.vertices = float3sToVectors(meshData.vertices);
-        mesh.triangles = meshData.triangles;
-        mesh.RecalculateNormals();
-        GetComponent<MeshFilter>().sharedMesh = mesh;
-        gameObject.name += $" : {meshData.x}, {meshData.z}";
+        if(hasIsland)
+        {
+            Mesh mesh = new Mesh();
+            mesh.vertices = float3sToVectors(meshData.vertices);
+            mesh.triangles = meshData.triangles;
+            mesh.RecalculateNormals();
+            GetComponent<MeshFilter>().sharedMesh = mesh;
+        }
     }
 
     /// <summary>

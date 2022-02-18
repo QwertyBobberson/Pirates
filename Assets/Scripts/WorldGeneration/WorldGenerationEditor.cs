@@ -1,5 +1,10 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
+
+using Random = UnityEngine.Random;
 
 [CustomEditor(typeof(WorldGeneration))]
 public class WorldGenerationEditor : Editor
@@ -15,28 +20,15 @@ public class WorldGenerationEditor : Editor
             WorldGeneration.singleton = worldGen;
         }
 
-        if(GUILayout.Button("Randomize Seed"))
+        if(GUILayout.Button("Regenerate Test World"))
         {
             worldGen.seed = Random.Range(int.MinValue, int.MaxValue);
             Random.InitState(worldGen.seed);
             worldGen.offset.x = Random.Range(-100000, 100000);
             worldGen.offset.y = Random.Range(-100000, 100000);
-        }
-    
-        EditorGUILayout.BeginHorizontal();
-
         
-        if(GUILayout.Button("Regenerate Test World"))
-        {
+            worldGen.DestroyWorld();
             worldGen.InitialLoad();
         }
-
-        if(GUILayout.Button("Destroy Test World"))
-        {
-            worldGen.DestroyWorld();
-        }
-
-        EditorGUILayout.EndHorizontal();
-
     }
 }
